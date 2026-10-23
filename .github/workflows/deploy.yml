@@ -8,8 +8,10 @@ name: Build and Deploy
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md", "docs/**"]   # правка документации не пересобирает образ
   pull_request:
     branches: [main]
+    paths-ignore: ["**.md", "docs/**"]
   workflow_dispatch:
 
 permissions:
