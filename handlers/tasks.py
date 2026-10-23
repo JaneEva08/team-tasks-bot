@@ -11,6 +11,34 @@ from database import db
 
 router = Router()
 
+# Telegram не принимает сообщения длиннее 4096 символов
+TELEGRAM_MESSAGE_LIMIT = 4096
+MAX_TASK_LENGTH = 1000
+
+
+def split_into_messages(blocks: list[str], limit: int = TELEGRAM_MESSAGE_LIMIT) -> list[str]:
+    """Собирает блоки текста в сообщения, каждое не длиннее limit символов.
+
+    Блок не разрывается посередине, если он сам помещается в лимит.
+    """
+    messages: list[str] = []
+    current = ""
+    for block in blocks:
+        candidate = f"{current}\n{block}" if current else block
+        if len(candidate) <= limit:
+            current = candidate
+            continue
+        if current:
+            messages.append(current)
+        # Слишком длинный блок режем на куски
+        while len(block) > limit:
+            messages.append(block[:limit])
+            block = block[limit:]
+        current = block
+    if current:
+        messages.append(current)
+    return messages
+
 
 class AddTaskStates(StatesGroup):
     """Состояния диалога добавления задачи (FSM)."""
@@ -28,7 +56,20 @@ async def cmd_add(message: Message, state: FSMContext) -> None:
 @router.message(AddTaskStates.waiting_for_text)
 async def process_task_text(message: Message, state: FSMContext) -> None:
     """Сохраняет присланный текст как новую задачу в базе данных."""
-    task_text = message.text
+    task_text = (message.text or "").strip()
+
+    # Фото, стикер или пустое сообщение раньше роняли запись в базу
+    # (поле text NOT NULL) — теперь просим прислать текст ещё раз.
+    if not task_text:
+        await message.answer("⚠️ Пришлите задачу текстом, например: «Подготовить отчёт к пятнице».")
+        return
+    if len(task_text) > MAX_TASK_LENGTH:
+        await message.answer(
+            f"⚠️ Слишком длинная задача: {len(task_text)} символов, максимум {MAX_TASK_LENGTH}. "
+            "Сократите текст и пришлите ещё раз."
+        )
+        return
+
     author = message.from_user.username or message.from_user.full_name
 
     task_id = db.add_task(text=task_text, user=author)
@@ -52,13 +93,15 @@ async def cmd_list(message: Message) -> None:
         return
 
     # Показываем последние добавленные задачи сверху
-    lines = ["📋 Список всех задач:\n"]
+    blocks = ["📋 Список всех задач:\n"]
     for task_id, text, user, created_at in reversed(tasks):
-        lines.append(
+        blocks.append(
             f"🔹 ID: {task_id}\n📝 {text}\n👤 {user}\n🕒 {created_at}\n"
         )
 
-    await message.answer("\n".join(lines))
+    # Длинный список отправляем несколькими сообщениями
+    for chunk in split_into_messages(blocks):
+        await message.answer(chunk)
 
 
 @router.message(Command("list_csv"))

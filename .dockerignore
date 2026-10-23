@@ -1,0 +1,19 @@
+# Секреты и данные никогда не попадают в образ
+.env
+*.db
+*.csv
+data/
+
+# Служебное
+.git
+.github
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+requirements-dev.txt
+pytest.ini
+*.md
+docker-compose.yml

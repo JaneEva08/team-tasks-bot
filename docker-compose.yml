@@ -1,0 +1,18 @@
+# Запуск бота на сервере из готового образа в GitHub Container Registry.
+# Токен — в файле .env рядом с этим файлом (см. .env.example), в git он не попадает.
+services:
+  bot:
+    image: ghcr.io/janeeva08/team-tasks-bot:${IMAGE_TAG:-latest}
+    container_name: team-tasks-bot
+    env_file: .env
+    volumes:
+      - bot-data:/app/data   # база задач переживает обновление контейнера
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  bot-data:
