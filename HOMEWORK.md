@@ -47,12 +47,30 @@
 2. `/list` при большом числе задач превышал лимит Telegram в 4096 символов — сообщение не отправлялось. Теперь список делится на несколько сообщений.
 3. CSV-выгрузка писалась в папку с кодом — в контейнере от непривилегированного пользователя это не сработало бы. Теперь файл создаётся во временной папке и удаляется после отправки.
 
-## Как проверить
+## Результат
 
-1. Открыть вкладку [Actions](https://github.com/JaneEva08/team-tasks-bot/actions) — последний запуск на `main` зелёный, три job: тесты, сборка, деплой (пропущен до настройки сервера).
-2. Открыть [Packages](https://github.com/JaneEva08?tab=packages) — образ `team-tasks-bot` с тегами `latest` и `sha-…`.
-3. Локально: `docker run --rm -e BOT_TOKEN=<токен> -v bot-data:/app/data ghcr.io/janeeva08/team-tasks-bot:latest`.
+| Что | Итог |
+|---|---|
+| PR #1 `feature/docker-ci → main` | тесты ✅, пробная сборка образа ✅, публикации нет, деплой пропущен |
+| Запуск на `main` после слияния (коммит `e096839`) | тесты ✅ → сборка ✅ → проверка образа ✅ → пуш в ghcr.io ✅, деплой пропущен (сервер не подключён) |
+| Пакет | [ghcr.io/janeeva08/team-tasks-bot](https://github.com/JaneEva08/team-tasks-bot/pkgs/container/team-tasks-bot), публичный, теги `latest` и `sha-e096839` |
+
+Скачать и запустить образ:
+
+```bash
+docker run -d --name team-tasks-bot -e BOT_TOKEN=<токен> -v bot-data:/app/data ghcr.io/janeeva08/team-tasks-bot:latest
+```
 
 ## Скриншоты
 
-_(добавить после первого запуска: вкладка Actions с зелёным запуском, страница пакета в ghcr.io, PR с пройденными проверками)_
+**1. Pull request: все проверки пройдены до слияния**
+
+![Проверки PR](docs/screenshots/01-pull-request-checks.png)
+
+**2. Actions: запуск на PR и запуск на main после слияния**
+
+![Запуски Actions](docs/screenshots/02-actions-runs.png)
+
+**3. Опубликованный образ в GitHub Container Registry**
+
+![Пакет в ghcr.io](docs/screenshots/03-ghcr-package.png)
