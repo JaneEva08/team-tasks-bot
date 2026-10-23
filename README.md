@@ -1,72 +1,105 @@
-# Telegram-бот для хранения задач команды
+# Telegram-бот для задач команды
 
-Простой Telegram-бот на **Python + aiogram 3 + SQLite3** для сбора и хранения задач/идей команды.
+[![Build and Deploy](https://github.com/JaneEva08/team-tasks-bot/actions/workflows/deploy.yml/badge.svg)](https://github.com/JaneEva08/team-tasks-bot/actions/workflows/deploy.yml)
+
+Бот на **Python + aiogram 3 + SQLite**: команда добавляет задачи и идеи в общий список, смотрит их и выгружает в CSV для Excel. Проект упакован в Docker, каждое изменение проверяется автотестами в GitHub Actions, готовый образ публикуется в GitHub Container Registry.
 
 ## Возможности
 
-- ✅ Добавление задач в общий список (`/add`)
-- 📋 Просмотр всех задач (`/list`)
-- 📊 Экспорт задач в CSV-файл (`/list_csv`)
-- 💾 Автосохранение в SQLite — данные не теряются при перезапуске бота
+- ✅ Добавление задач в общий список (`/add`) с проверкой ввода: фото, стикер или пустое сообщение не ломают бота
+- 📋 Просмотр всех задач (`/list`), длинный список приходит несколькими сообщениями
+- 📊 Экспорт в CSV (`/list_csv`), кириллица корректно открывается в Excel
+- 💾 Задачи хранятся в SQLite и не теряются при перезапуске и обновлении
 
-## Команды бота
+## Команды
 
 | Команда | Описание |
 |---|---|
 | `/start` | Приветствие и список команд |
-| `/add` | Добавить новую задачу |
+| `/add` | Добавить задачу |
 | `/list` | Показать все задачи |
-| `/list_csv` | Скачать список задач в формате CSV |
+| `/list_csv` | Скачать список в CSV |
 
-## Структура проекта
+## Как устроена доставка (CI/CD)
 
 ```
-telegram_task_bot/
-├── main.py              # точка входа
-├── config.py            # загрузка токена из .env
-├── database/
-│   └── db.py             # класс Database: создание таблицы, CRUD, экспорт в CSV
+feature/... ──PR──▶ main
+   │                 │
+   ▼                 ▼
+ тесты          тесты → сборка образа → проверка образа → ghcr.io → (сервер)
+ пробная сборка
+```
+
+- **Pull request в main** — 27 автотестов и пробная сборка Docker-образа. В реестр ничего не уходит.
+- **Слияние в main** — тесты, сборка, проверка образа (код запускается, бот не под root, база пишется), публикация в `ghcr.io/janeeva08/team-tasks-bot` с тегами `latest` и `sha-<коммит>`.
+- **Деплой на сервер** — готовый job по SSH с откатом на прошлую версию, если контейнер не поднялся. Включается переменной `DEPLOY_ENABLED=true` после настройки сервера.
+
+## Запуск через Docker
+
+На сервере нужны Docker и два файла из репозитория: `docker-compose.yml` и `.env`.
+
+```bash
+cp .env.example .env        # вставить токен от @BotFather
+docker compose up -d        # скачать образ и запустить
+docker compose logs -f      # посмотреть логи
+```
+
+Обновление до свежей версии: `docker compose pull && docker compose up -d`.
+
+> ⚠️ `docker compose down -v` удаляет том с базой задач. Для остановки используйте `docker compose down` без `-v`.
+
+Токен в образ не попадает: `.env`, база и выгрузки исключены через `.dockerignore`.
+
+## Запуск без Docker
+
+```bash
+python -m venv venv
+venv\Scripts\Activate.ps1          # Windows PowerShell; на Linux: source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env               # вставить токен
+python main.py
+```
+
+## Тесты
+
+```bash
+pip install -r requirements-dev.txt
+pytest -v
+```
+
+Тесты не ходят в Telegram и не требуют токена: сообщения подменяются заглушками, база создаётся во временной папке.
+
+## Настройки
+
+| Переменная | Обязательна | Описание |
+|---|---|---|
+| `BOT_TOKEN` | да | Токен бота от @BotFather |
+| `DB_PATH` | нет | Путь к файлу базы. В Docker — `/app/data/tasks.db` (том) |
+
+## Структура
+
+```
+team-tasks-bot/
+├── main.py                  # точка входа
+├── config.py                # загрузка токена из .env
+├── database/db.py           # класс Database: таблица, запись, чтение, CSV
 ├── handlers/
-│   ├── start.py           # обработчик /start
-│   └── tasks.py           # обработчики /add, /list, /list_csv (+ FSM)
-├── requirements.txt
-└── .env                  # BOT_TOKEN (не хранится в git)
+│   ├── start.py             # /start
+│   └── tasks.py             # /add (FSM), /list, /list_csv
+├── tests/                   # автотесты pytest
+├── Dockerfile               # образ: python:3.12-slim, пользователь без root
+├── docker-compose.yml       # запуск на сервере из ghcr.io
+└── .github/workflows/
+    └── deploy.yml           # тесты → сборка → ghcr.io → деплой
 ```
-
-## Установка и запуск
-
-1. Создать и активировать виртуальное окружение:
-
-   ```
-   python -m venv venv
-   venv\Scripts\Activate.ps1   # Windows PowerShell
-   ```
-
-2. Установить зависимости:
-
-   ```
-   pip install -r requirements.txt
-   ```
-
-3. Создать файл `.env` на основе `.env.example` и вставить токен от [@BotFather](https://t.me/BotFather):
-
-   ```
-   BOT_TOKEN=your_token_here
-   ```
-
-4. Запустить бота:
-
-   ```
-   python main.py
-   ```
 
 ## База данных
 
-Таблица `tasks` в файле `tasks.db`:
+Таблица `tasks`:
 
 | Поле | Тип | Описание |
 |---|---|---|
-| id | INTEGER | уникальный идентификатор задачи |
-| text | TEXT | текст задачи |
-| user | TEXT | автор задачи |
+| id | INTEGER | идентификатор задачи |
+| text | TEXT | текст задачи (до 1000 символов) |
+| user | TEXT | автор (username или имя) |
 | created_at | TEXT | дата и время создания |

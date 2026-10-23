@@ -1,20 +1,27 @@
 """
 Модуль для работы с базой данных SQLite3.
 Хранит все задачи в файле tasks.db в таблице tasks.
+
+Путь к файлу базы можно задать переменной окружения DB_PATH —
+в Docker база лежит в томе /app/data, чтобы переживать пересборку контейнера.
 """
 import csv
+import os
 import sqlite3
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent / "tasks.db"
+DEFAULT_DB_PATH = Path(__file__).parent.parent / "tasks.db"
+DB_PATH = Path(os.getenv("DB_PATH", DEFAULT_DB_PATH))
 
 
 class Database:
     """Класс инкапсулирует всю работу с базой данных задач."""
 
     def __init__(self, db_path: Path = DB_PATH):
-        self.db_path = db_path
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._create_table()
 
     def _connect(self) -> sqlite3.Connection:
@@ -69,7 +76,9 @@ class Database:
         """Выгружает все задачи в CSV-файл и возвращает путь к нему."""
         tasks = self.get_all_tasks()
         filename = f"tasks_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-        file_path = Path(filename)
+        # Пишем во временную папку системы, а не в рабочую: в контейнере
+        # папка с кодом доступна только для чтения пользователю бота.
+        file_path = Path(tempfile.gettempdir()) / filename
 
         with open(file_path, "w", newline="", encoding="utf-8-sig") as csv_file:
             writer = csv.writer(csv_file)
